@@ -1,0 +1,26 @@
+﻿@page "/"
+
+
+<AuthorizeView>
+    <Authorized>
+        <div class="login-content">
+            <div class="container">
+                <img class="login-img" src="img/oneGiantLeap.svg" alt="Logo" style="width:20%;">
+                <div class="container">
+                    Welcome to the One Giant Leap Lunar Command and Control Application.
+                </div>
+            </div>
+        </div>
+    </Authorized>
+    <NotAuthorized>
+        <div class="login-content">
+            <div class="container">
+                <img src="img/oneGiantLeap.svg" alt="Logo" style="width:20%;">
+                <h2><b>Welcome</b></h2>
+                <a href="authentication/login">
+                    <input type="submit" class="btnlogin" value="Login">
+                </a>
+            </div>
+        </div>
+    </NotAuthorized>
+</AuthorizeView>

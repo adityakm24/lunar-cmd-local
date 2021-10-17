@@ -1,0 +1,48 @@
+﻿html,
+body {
+    height: 100%;
+    margin: auto;
+    padding: 0;
+    width: 100%;
+    background-color: rgba(255, 255, 255, 0.46);
+    background-image: url('../img/background.jpg');
+}
+
+
+.login-content {
+    transition: 0.3s;
+    vertical-align: middle;
+    overflow: hidden;
+}
+
+
+.container {
+    margin: 20px;
+    text-align: center;
+    vertical-align: middle;
+}
+
+.btnlogin {
+    width: 75vw;
+    height: 50px;
+    border-radius: 25px;
+    outline: none;
+    border: none;
+    background-image: linear-gradient(to right, #32be8f, #38d39f, #32be8f);
+    background-size: 200%;
+    font-size: 1.2rem;
+    color: #fff;
+    font-family: 'Poppins', sans-serif;
+    text-transform: uppercase;
+    margin: 1rem 0;
+    cursor: pointer;
+    transition: .5s;
+    
+}
+
+.btnlogin:hover {
+    background-position: right;
+}
+a {
+    text-decoration: none;
+}

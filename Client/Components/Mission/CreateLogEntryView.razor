@@ -1,0 +1,217 @@
+﻿@using System.IO
+@using LunarAPIClient.NotificationClient
+@using System.Net.Http.Headers
+
+@inject IAudioCommandClient audioCommandClient
+@inject IAccessTokenProvider accessTokenProvider
+@inject ICommandClient commandClient
+@inject IJSRuntime jsRuntime
+
+<EditForm style="width: 100%" Model=@CurrentMission OnValidSubmit=@Enter>
+    <div style="display: flex; flex-direction: column;">
+        <div style="display: flex; flex-direction: row;flex-grow:1;">
+            <InputText style="flex-grow:1;margin:2px" @bind-Value=@CurrentMission.CurrentEntryText />
+            <FluentButton style="flex-shrink: 0;margin:2px" type="submit" Disabled=inputDisabled>Send</FluentButton>
+            <FluentButton id="startRecordingButton" style="flex-shrink: 0;margin:2px" disabled="@recording" hidden="@recording" @onclick=StartRecording>
+                <i class="ms-Icon ms-Icon--Microphone"></i>
+            </FluentButton>
+            <FluentButton id="stopRecordingButton" style="flex-shrink: 0;margin:2px" disabled="@notRecording" hidden="@notRecording" @onclick=StopRecording>
+                <i class="ms-Icon ms-Icon--CircleStopSolid"></i>
+            </FluentButton>
+            @if (!clearInputFile)
+            {
+                <FluentButton class="custom-file-upload" style="flex-shrink: 0;margin:2px" @onclick=TriggerFileUpload>
+                    <i class="ms-Icon ms-Icon--Attach"></i>
+                </FluentButton>
+                <InputFile id="file-upload" OnChange=LoadFiles multiple style="display:none"></InputFile>
+            }
+            @if (!string.IsNullOrWhiteSpace(SelectedFilesMessage))
+            {
+                <div style="flex-shrink:1">@SelectedFilesMessage</div>
+            }
+        </div>        
+    </div>
+</EditForm>
+
+@code {
+    [Parameter, EditorRequired]
+    public Mission CurrentMission { get; set; } = new Mission();
+
+    private string SelectedFilesMessage { get; set; } = string.Empty;
+    private bool inputDisabled { get; set; } = false;
+    private bool clearInputFile { get; set; } = false;
+
+    private bool recording { get; set; } = false;
+    private bool notRecording { get; set; } = true;
+
+    private DotNetObjectReference<CreateLogEntryView>? missionViewObjRef { get; set; } = null;
+
+    IReadOnlyList<IBrowserFile>? selectedFiles;
+
+    private void TriggerFileUpload()
+    {
+        jsRuntime.InvokeVoidAsync("MyJSMethods.triggerFileUpload", "file-upload");
+    }
+
+    private void LoadFiles(InputFileChangeEventArgs e)
+    {
+        selectedFiles = e.GetMultipleFiles();
+    }
+
+    private void ClearInputFile()
+    {
+        clearInputFile = true;
+        StateHasChanged();
+        clearInputFile = false;
+        StateHasChanged();
+    }
+
+    private const long maxFileSize = 1024 * 1024 * 50; // 50mb
+    private async Task Enter(EditContext editContext)
+    {
+        inputDisabled = true;
+        StateHasChanged();
+        var attachments = selectedFiles?.Select(f =>
+            {
+                return new
+                {
+                    file = f,
+                    attachment = new LogEntryAttachment
+                        {
+                            Id = Guid.NewGuid(),
+                            Name = f.Name,
+                            Alt = "Alternate Text"
+                        },
+                };
+            }).ToList();
+
+        var entryCmd = new AppendLogEntryCommand
+            {
+                LogEntryId = Guid.NewGuid(),
+                Attachments = (attachments?.Select(a => a.attachment) ?? Enumerable.Empty<LogEntryAttachment>()).ToList(),
+                Payload = new PlaintextPayload
+                {
+                    Value = CurrentMission.CurrentEntryText
+                }
+            };
+
+        var src = new CancellationTokenSource();
+
+        try
+        {
+            await commandClient.SendCommands(new[] { entryCmd }, src.Token);
+        }
+        catch (AccessTokenNotAvailableException exception)
+        {
+            exception.Redirect();
+        }
+
+        if (attachments != null)
+        {
+            using var content = new MultipartFormDataContent();
+            var commands = new List<Command>();
+            foreach (var attachment in attachments)
+            {
+                var file = attachment.file;
+                var fileContent = new StreamContent(file.OpenReadStream(maxFileSize, src.Token));
+
+                fileContent.Headers.ContentType = new MediaTypeHeaderValue(file.ContentType);
+
+                content.Add(
+                    content: fileContent,
+                    name: attachment.attachment.Id.ToString(),
+                    fileName: file.Name
+                );
+            }
+
+            try
+            {
+                var results = await commandClient.SendAttachmentsCommand(CurrentMission.Id, entryCmd.LogEntryId, content, src.Token);
+
+                var errors = results.Where(r => !r.Success);
+
+                if (errors.Any())
+                {
+                    throw new AggregateException(errors.Select(e => new Exception(e.Error)));
+                }
+            }
+            catch (AccessTokenNotAvailableException exception)
+            {
+                exception.Redirect();
+            }
+        }
+
+        CurrentMission.CurrentEntryText = "";
+
+        ClearInputFile();
+
+        inputDisabled = false;
+        StateHasChanged();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (missionViewObjRef == null)
+        {
+            missionViewObjRef = DotNetObjectReference.Create(this);
+            await jsRuntime.InvokeVoidAsync("MyJSMethods.initializeObjectReference", missionViewObjRef);
+        }
+
+        base.OnAfterRender(firstRender);
+    }
+
+    [JSInvokable]
+    public Task ResetControl()
+    {
+        CurrentMission.CurrentEntryText = "";
+        ClearInputFile();
+        return Task.CompletedTask;
+    }
+
+    private async Task Record()
+    {
+        recording = true;
+        notRecording = false;
+
+        await jsRuntime.InvokeVoidAsync("MyJSMethods.startRecordingOnce");
+    }
+
+    private async Task StartRecording()
+    {
+        recording = true;
+        notRecording = false;
+
+        await jsRuntime.InvokeVoidAsync("MyJSMethods.startRecording");
+    }
+
+    private Task StopRecording()
+    {
+        recording = false;
+        notRecording = true;
+        return Task.CompletedTask;
+    }
+
+    [JSInvokable]
+    public Task RecordingStopped()
+    {
+        recording = false;
+        notRecording = true;
+        return Task.CompletedTask;
+    }
+
+    [JSInvokable]
+    public string GetAudioCommandEndpoint() => $"{audioCommandClient.GetEndpoint().ToString()}/{CurrentMission.Id}";
+
+    [JSInvokable]
+    public string GetSubscriptionKey() => "18d86c7414234aae8cfae7a8ad04c82e";
+
+    [JSInvokable]
+    public string GetRegion() => "australiaeast";
+
+    [JSInvokable]
+    public async Task<string> GetAccessToken() 
+    {
+        var token = await accessTokenProvider.RequestAccessToken();
+        return token.TryGetToken(out AccessToken accessToken) ? accessToken.Value : String.Empty;
+    }
+}

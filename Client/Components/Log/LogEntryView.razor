@@ -1,0 +1,120 @@
+﻿@inject ILogEntryClient logEntryClient
+@inject Mission mission
+@inject ICommandClient commandClient
+@inject StateContainer state
+
+<div style="display:flex;flex-direction:column">
+    <div style="flex-wrap:wrap;flex-grow:1">
+        @if (Value is PlaintextLogEntry plaintextLogEntry)
+        {
+            <PlaintextLogEntryView @ref="updateableLogEntryView" Value=plaintextLogEntry Editing=@Editing />
+        }
+        else if (Value is PlaceholderLogEntry placeholderLogEntry)
+        {
+            <PlaceholderLogEntryView Value=placeholderLogEntry />
+        }
+    </div>
+    @if (Value.Attachments?.Count() > 0)
+    {
+        <div style="display:flex;flex-direction:row;">
+            @foreach (var attachment in Value.Attachments)
+            {
+                <LogEntryAttachmentView Attachment=attachment />
+            }
+        </div>
+    }
+    @if (CanEdit)
+    {
+        <div style="display:flex;flex-direction: row;align-content:center">
+            @if (Editing)
+            {
+                <FluentButton style="margin: 2px;" @onclick="Update">
+                    <span><i class="ms-Icon ms-Icon--Accept"></i></span>
+                </FluentButton>
+            }
+            <FluentButton style="margin: 2px" @onclick="ToggleEdit">
+                @if (Editing)
+                {
+                    <span><i class="ms-Icon ms-Icon--Cancel"></i></span>
+                }
+                else
+                {
+                    <span><i class="ms-Icon ms-Icon--EditNote"></i></span>
+                }
+            </FluentButton>
+
+
+            @if (Value.IsEdited)
+            {
+                <FluentButton style="margin: 2px" @onclick="ToggleHistory">
+                    @if (ShowHistory)
+                    {
+                        <span><i class="ms-Icon ms-Icon--Hide3"></i></span>
+                    }
+                    else
+                    {
+                        <span><i class="ms-Icon ms-Icon--History"></i></span>
+                    }
+                </FluentButton>
+            }
+        </div>
+    }
+    @if (ShowHistory && Value.EditHistory != null)
+    {
+        foreach (var historicalEntry in Value.EditHistory.OrderByDescending(e => e.UpdatedAt))
+        {
+            <FluentDivider />
+            @historicalEntry.UpdatedAt
+            <LogEntryView Value=historicalEntry IsHistory=true />
+        }
+    }
+</div>
+@code {
+    [Parameter]
+    public LogEntry Value { get; set; } = new PlaintextLogEntry();
+
+    [Parameter]
+    public bool Editing { get; set; } = false;
+    [Parameter]
+    public bool IsHistory { get; set; } = false;
+
+    public bool ShowHistory { get; set; } = false;
+    
+    public bool CanEdit => Value.User.Id.Equals(state.User.Id) && !Value.IsFinalized && !IsHistory;
+
+    IEditableLogEntryView? updateableLogEntryView = null;
+
+    private void ToggleEdit(EventArgs args)
+    {
+        Editing = !Editing;
+    }
+
+    private void ToggleHistory(EventArgs args)
+    {
+        ShowHistory = !ShowHistory;
+    }
+
+    private async Task Update(EventArgs args)
+    {
+        if (updateableLogEntryView == null)
+            return;
+
+        var cmd = updateableLogEntryView.UpdateCommand;
+
+        var src = new CancellationTokenSource();
+
+        try
+        {
+            await commandClient.SendCommands(new[] { cmd }, src.Token);
+        }
+        catch (AccessTokenNotAvailableException exception)
+        {
+            exception.Redirect();
+        }
+
+        Editing = false;
+
+        StateHasChanged();
+    }
+
+}

@@ -1,0 +1,58 @@
+﻿@inherits LayoutComponentBase
+
+<AuthorizeView>
+    <Authorized>
+        <MainContainer>
+            <HeaderRegion>
+                <Header>
+                    <BrandingRegion>
+                        <Branding>
+                            <CustomIcon>
+                                <img src="img/oneGiantLeap.svg" alt="Logo" style="margin-right:20px;height:5vh;width:5vh;">
+                            </CustomIcon>
+                            <ChildContent>ONE GIANT LEAP - LUNAR C&C</ChildContent>
+                        </Branding>
+                    </BrandingRegion>
+                    <Actions>
+                        <NavItem Icon="user" href="/authentication/login">
+                        </NavItem>
+                    </Actions>
+                </Header>
+            </HeaderRegion>
+            <SideNavigationRegion>
+                <VerticalNav HasIcons="true">
+                    <NavItem Icon="users">
+                        <a style="text-decoration: none;" href=@CurrentMissionPath>Current Mission</a>
+                    </NavItem>
+                    <NavItem Icon="file-settings">
+                        <ChildContent>
+                            <a style="text-decoration: none;" href="/mission-settings">Mission Settings</a>
+                        </ChildContent>
+                    </NavItem>
+                    <NavItem Icon="user">
+                        <ChildContent>
+                            <a style="text-decoration: none;" href="/user-settings">User Settings</a>
+                        </ChildContent>
+                    </NavItem>
+                    <NavItem Icon="info-standard">
+                        <ChildContent>
+                            <a style="text-decoration: none;" href="/about">About</a>
+                        </ChildContent>
+                    </NavItem>
+                </VerticalNav>
+            </SideNavigationRegion>
+            <ContentArea>
+                @Body
+            </ContentArea>
+        </MainContainer>
+    </Authorized>
+    <NotAuthorized>
+        @Body
+    </NotAuthorized>
+</AuthorizeView>
+
+@code {
+    public Guid CurrentMissionID { get; set; } = Guid.Empty;
+
+    private string CurrentMissionPath => $"/mission/{CurrentMissionID}";
+}
